@@ -1,0 +1,11 @@
+# Real LinkedIn profile data from live searches — don't commit
+searches_for_philip/
+*.preview.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store
