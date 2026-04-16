@@ -1,0 +1,1 @@
+Thanks for connecting {{First Name OR Title w/ Last Name if appropriate e.g. Dr.}}! I'm a high school senior incoming at Stanford. I'm really interested in the marketing field, and I'd be really excited to hear about what you do as a {{their general job but not worded super specifically/formally}}. Would you be able to meet for ~15 mins next Monday or Wednesday?

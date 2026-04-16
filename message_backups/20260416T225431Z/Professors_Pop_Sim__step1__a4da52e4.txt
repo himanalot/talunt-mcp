@@ -1,0 +1,3 @@
+Hi {{First Name OR Title w/ Last Name if appropriate e.g. Dr.}}, I'm an incoming student at Stanford from Vermont! Recently, I've been exploring population simulation, and I'm pretty hungry to learn more.
+
+I'd really love to get your thoughts on this given your experience here. Would you be up for a 15 min chat? Happy to buy you a digital coffee!

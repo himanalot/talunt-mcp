@@ -1,0 +1,3 @@
+Thanks for connecting {{First Name OR Title w/ Last Name if appropriate e.g. Dr.}}! I'm a high school senior incoming at Stanford. I'm exploring potential career opportunities and would love to learn about what your daily workflows as a {{their general job but not worded super specifically/formally}} look like.
+
+Would you be interested for a 15 min chat? Happy to buy you a digital coffee :)

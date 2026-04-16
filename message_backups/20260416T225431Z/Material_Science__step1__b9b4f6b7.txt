@@ -1,0 +1,1 @@
+Thanks for connecting {{First Name OR Title w/ Last Name if appropriate e.g. Dr.}}! I'm a high school senior incoming at Stanford. I'm researching how materials scientists run simulations day to day, so  DFT, molecular dynamics, etc. (that kind of thing). Would you be down for a 15 min chat? I'm wondering what your process looks like when you're researching.

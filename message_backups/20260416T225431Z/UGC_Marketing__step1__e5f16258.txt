@@ -1,0 +1,1 @@
+Hi {{First Name}}, I'm a YC founder researching how consumer teams filter UGC and short form content before running it. Most people I've talked to say there's no great way to tell what'll convert. I'm curious to learn how your team handles that. Would you be down for a 15 min chat?

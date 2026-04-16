@@ -1,0 +1,82 @@
+[
+  {
+    "sequence_name": "Knowledge Workers (Elijah)",
+    "sequence_id": "28ec6f36-b346-4828-892a-c045de52b4ff",
+    "step_id": "b3fffd37-0044-4d3f-a88c-48810cbbff93",
+    "step_order": 1,
+    "backup_file": "Knowledge_Workers_Elijah___step1__28ec6f36.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Professors Pop Sim",
+    "sequence_id": "a4da52e4-5c66-4d0a-8800-e267f9e17b87",
+    "step_id": "51cd666b-4599-45ff-9826-a1bbaa871758",
+    "step_order": 1,
+    "backup_file": "Professors_Pop_Sim__step1__a4da52e4.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Knowledge Workers",
+    "sequence_id": "8cb7deb9-18f1-4e8f-9d7a-662107f3c534",
+    "step_id": "70f190dd-a1d8-42c2-98c5-0084f7ec970e",
+    "step_order": 1,
+    "backup_file": "Knowledge_Workers__step1__8cb7deb9.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Physical lab equipment (Copy)",
+    "sequence_id": "ecb53f83-548e-4b41-b083-939e2fc351e1",
+    "step_id": "48fc7bae-12ea-4ac8-928b-863ce043d21d",
+    "step_order": 1,
+    "backup_file": "Physical_lab_equipment_Copy___step1__ecb53f83.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Industry ML Researchers",
+    "sequence_id": "a6a9956f-b6b3-4013-802d-996fbce54b2c",
+    "step_id": "958c8181-efde-4865-b3f5-6770578b5a18",
+    "step_order": 1,
+    "backup_file": "Industry_ML_Researchers__step1__a6a9956f.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Material Science",
+    "sequence_id": "b9b4f6b7-1e32-4db4-8ef4-cd520e4c6eee",
+    "step_id": "1e35a798-5ce3-4340-95ac-bf2c48a899ca",
+    "step_order": 1,
+    "backup_file": "Material_Science__step1__b9b4f6b7.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "UGC Marketing",
+    "sequence_id": "e5f16258-f1ae-4102-9bb3-73b341e7770a",
+    "step_id": "f5ac32c1-5ab6-494b-9d31-6b1a752f8f42",
+    "step_order": 1,
+    "backup_file": "UGC_Marketing__step1__e5f16258.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Physical lab equipment",
+    "sequence_id": "791e95fc-e13e-4f6a-bf6c-ad3b1c1ca8d1",
+    "step_id": "bb8f3e11-fcd6-4bb6-9dca-d414a56de757",
+    "step_order": 1,
+    "backup_file": "Physical_lab_equipment__step1__791e95fc.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Eng",
+    "sequence_id": "a1d0188e-43bd-440a-b24b-86bc0e5450b8",
+    "step_id": "6bd0ff4d-e3e7-48b0-ae5e-d0020acb654f",
+    "step_order": 1,
+    "backup_file": "Eng__step1__a1d0188e.txt",
+    "changed": true
+  },
+  {
+    "sequence_name": "Marketing",
+    "sequence_id": "bd172d69-54c4-4699-be84-ff03af35fdbc",
+    "step_id": "d413f56c-a0eb-44d0-8ff5-9d326fb46c67",
+    "step_order": 1,
+    "backup_file": "Marketing__step1__bd172d69.txt",
+    "changed": true
+  }
+]

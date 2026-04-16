@@ -1,0 +1,3 @@
+Hi {{First Name}}, I'm a high school senior incoming at Stanford. I'm researching how people work w/ legacy simulation software, and I'm curious what your workflow looks like. I'm a researcher, and I've experienced pains with these types of software in the past, so I'm quite interested in how others feel about them. Would you be down for a 15 min chat?
+
+Any help here would be greatly appreciated!

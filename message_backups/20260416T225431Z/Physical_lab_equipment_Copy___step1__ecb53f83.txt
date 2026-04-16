@@ -1,0 +1,3 @@
+Hi {{First Name}}, I'm a high school senior incoming at Stanford. I'm researching how lab scientists work with physical equipment day to day — things like {{examples specific to their work}}. I'm curious to see where you think things are particularly slow or painful. Would you be up for a 15 min chat sometime soon?
+
+Any help here would be greatly appreciated!
