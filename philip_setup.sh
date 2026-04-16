@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # End-to-end setup for the "Industry ML Researchers (Philip)" sequence.
-# Requires: uv installed, `talunt` alias set up (see README), signed in
-# to talunt.io in Chrome.
-#
-# Run from Philip's machine:  bash philip_setup.sh
+# Requires: uv installed, signed in to talunt.io in Chrome.
+# Run from anywhere:  bash philip_setup.sh
 set -euo pipefail
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+talunt() { uv run --script "$SCRIPT_DIR/cli.py" "$@"; }
 
 SEARCH_DIR=/tmp/philip_searches
 mkdir -p "$SEARCH_DIR"
