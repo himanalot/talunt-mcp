@@ -107,7 +107,8 @@ def cmd_messages(args):
 
 def cmd_search(args):
     out(server.multi_source_search(
-        query=args.query, limit=args.limit, mode=args.mode
+        query=args.query, limit=args.limit, mode=args.mode,
+        poll=not args.no_poll, poll_timeout=args.poll_timeout,
     ))
 
 
@@ -351,6 +352,10 @@ def main():
     s = sub.add_parser("search"); s.add_argument("query")
     s.add_argument("--limit", type=int, default=20)
     s.add_argument("--mode", default="smart")
+    s.add_argument("--no-poll", action="store_true",
+                   help="return initial ~25 immediately instead of polling to full target")
+    s.add_argument("--poll-timeout", type=int, default=180,
+                   help="max seconds to poll for the full result set")
     s.set_defaults(fn=cmd_search)
 
     s = sub.add_parser("analyze"); s.add_argument("query")

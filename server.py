@@ -108,14 +108,25 @@ def multi_source_search(
     enrich_live: bool = True,
     limit: int = 100,
     company_id: str = DEFAULT_COMPANY_ID,
+    poll: bool = True,
+    poll_timeout: int = 120,
 ):
     """Run a candidate search across enabled sources (LinkedIn + others).
 
-    Response is large (typically 200-500 KB) and includes: job_id, parent_job_id,
-    candidates[], classification, progress, search_criteria, sources_enabled,
-    total_count, returned_count. Creates a row in search_history. mode is
-    typically 'smart'. Default company_id is the recruiter's active workspace."""
-    return _post(
+    The API is async-progressive: the initial POST returns ~25 candidates
+    immediately with `status: 'completed'` but `progress.found=25/target=limit`.
+    The server keeps enriching in the background; the full set is retrieved
+    by polling GET /api/recruiter/multi-source-search/{job_id}. By default
+    this tool polls until progress.found >= limit or `poll_timeout` seconds
+    elapse, then returns the full response.
+
+    Set poll=False to get the initial ~25 quickly. Response shape: {job_id,
+    parent_job_id, candidates[], classification, progress{found, target,
+    percent, is_searching}, search_criteria, sources_enabled, total_count,
+    returned_count, status}. Typical size 500KB-2MB for limit=100. Creates
+    a row in search_history with final_results_count matching the full pull."""
+    import time
+    initial = _post(
         "/api/recruiter/multi-source-search",
         {
             "query": query,
@@ -125,6 +136,38 @@ def multi_source_search(
             "limit": limit,
         },
     )
+    if not poll:
+        return initial
+    job_id = initial.get("job_id")
+    if not job_id:
+        return initial
+    target = (initial.get("progress") or {}).get("target") or limit
+    if len(initial.get("candidates") or []) >= target:
+        return initial
+
+    deadline = time.time() + poll_timeout
+    latest = initial
+    while time.time() < deadline:
+        time.sleep(3)
+        try:
+            r = httpx.get(
+                f"{BASE}/api/recruiter/multi-source-search/{job_id}",
+                cookies=_cookies(), headers=_headers(), timeout=30.0,
+            )
+        except httpx.HTTPError:
+            continue
+        if r.status_code != 200:
+            continue
+        latest = r.json()
+        prog = latest.get("progress") or {}
+        found = prog.get("found", len(latest.get("candidates") or []))
+        tgt = prog.get("target") or target
+        status = latest.get("status")
+        if found >= tgt:
+            return latest
+        if status in ("error", "cancelled"):
+            return latest
+    return latest
 
 
 @mcp.tool()

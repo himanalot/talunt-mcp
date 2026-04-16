@@ -75,7 +75,13 @@ Then inside Claude Code: run `/mcp` to verify the `talunt` server is connected. 
 
 ---
 
-## Philip handoff: create the ML sequence + import searches
+## One quirk worth knowing: progressive search
+
+`multi_source_search` is async-progressive on the server. A `POST /api/recruiter/multi-source-search` returns ~25 candidates quickly even when you ask for `limit=100`; the server keeps enriching in the background. The full set becomes retrievable via `GET /api/recruiter/multi-source-search/{job_id}` after ~15-90 seconds.
+
+This MCP/CLI handles it for you: `multi_source_search` (and `talunt search`) automatically polls GET every 3s until `progress.found >= target` or `poll_timeout` elapses, then returns the full set. Use `poll=False` / `--no-poll` if you want the fast initial ~25 back.
+
+## Philip handoff: create the ML sequence + run searches + enroll
 
 Message template for the step (already what we agreed on):
 
@@ -85,7 +91,13 @@ Thanks for connecting {{First Name OR Title w/ Last Name if appropriate e.g. Dr.
 Would you be up for a 15 min chat? Happy to buy you a digital coffee!
 ```
 
-Full command sequence (run from Philip's machine, signed in to talunt.io as Philip in Chrome):
+**One-shot script:** a bash script at `philip_setup.sh` does everything below in one go. Just run:
+```bash
+bash philip_setup.sh
+```
+It creates the sequence, adds the LinkedIn step, runs three parallel searches (with auto-polling to full 100 each), imports them as enrollments, and prints the activation command. The sequence ends in `draft` status — review the stats, then activate when ready.
+
+Manual walkthrough (if you want to tweak queries or step by step):
 
 ```bash
 # 1. Create the draft sequence (maxPerDay=2000 — server default is 50)
