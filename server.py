@@ -800,6 +800,94 @@ def generate_personalization(sequence_id: str, candidate_sequence_ids: list):
 
 
 @mcp.tool()
+def import_and_personalize(
+    sequence_id: str,
+    candidates: list,
+    step_id: str = None,
+    enable_enrichment: bool = False,
+    settle_seconds: int = 20,
+):
+    """Import candidates AND pre-set per-candidate personalizations.
+
+    For each candidate with `personalized_message` / `personalized_subject` fields,
+    after the bulk CSV import + enrollment completes this tool PATCHes
+    /personalize for every matched enrollment with isApproved=true, so when the
+    sequence step fires it sends the pre-rendered message verbatim (no AI
+    regeneration). Match is by email (case-insensitive).
+
+    Returns {imported, personalized, unmatched, step_id, sequence_id}."""
+    import time
+    # Run the standard CSV import
+    import_result = import_search_results_to_sequence.fn(
+        search_candidates=candidates,
+        sequence_id=sequence_id,
+        enable_enrichment=enable_enrichment,
+    ) if hasattr(import_search_results_to_sequence, "fn") else \
+        import_search_results_to_sequence(
+        search_candidates=candidates,
+        sequence_id=sequence_id,
+        enable_enrichment=enable_enrichment,
+    )
+    # Wait for server-side enrollment to settle
+    time.sleep(settle_seconds)
+
+    # Figure out step_id if not given (first step)
+    if not step_id:
+        seq = _get(f"/api/network/sequences/{sequence_id}")
+        steps = seq.get("steps") or []
+        if not steps:
+            raise RuntimeError("sequence has no steps; add a step before import_and_personalize")
+        step_id = steps[0]["id"]
+
+    # Build email → personalization map from input candidates
+    pers_by_email = {}
+    for c in candidates:
+        email = (c.get("email") or c.get("work_email") or "").lower().strip()
+        msg = c.get("personalized_message")
+        subj = c.get("personalized_subject")
+        if email and (msg or subj):
+            pers_by_email[email] = {"message": msg, "subject": subj}
+
+    # Fetch enrollments, match by email, PATCH each
+    results = server_sequence_results = _get(
+        f"/api/network/sequences/{sequence_id}/results"
+    )
+    personalized = unmatched = 0
+    per_email_enrolled = {
+        (c.get("candidate_email") or "").lower().strip(): c.get("id")
+        for c in server_sequence_results.get("candidates", [])
+        if c.get("candidate_email")
+    }
+    for email, pers in pers_by_email.items():
+        enrollment_id = per_email_enrolled.get(email)
+        if not enrollment_id:
+            unmatched += 1
+            continue
+        try:
+            _patch(
+                f"/api/network/sequences/{sequence_id}/personalize",
+                {
+                    "candidateSequenceId": enrollment_id,
+                    "stepId": step_id,
+                    "personalizedMessage": pers.get("message") or "",
+                    "personalizedSubject": pers.get("subject") or "",
+                    "isApproved": True,
+                },
+            )
+            personalized += 1
+        except Exception:
+            unmatched += 1
+
+    return {
+        "import_result": import_result,
+        "personalized": personalized,
+        "unmatched": unmatched,
+        "step_id": step_id,
+        "sequence_id": sequence_id,
+    }
+
+
+@mcp.tool()
 def save_personalization(
     sequence_id: str,
     personalized_message: str,

@@ -165,11 +165,28 @@ def cmd_import_search(args):
         data = json.load(f)
     # Accept either {candidates: [...]} or a bare list
     cands = data["candidates"] if isinstance(data, dict) and "candidates" in data else data
-    out(server.import_search_results_to_sequence(
-        search_candidates=cands,
-        sequence_id=resolve_seq(args.ref),
-        enable_enrichment=args.enrich,
-    ))
+    if args.confident_only:
+        before = len(cands)
+        cands = [c for c in cands if c.get("email_confidence") == "high"]
+        print(f"filtered to confident emails: {len(cands)}/{before}", file=sys.stderr)
+    if args.min_email and not args.confident_only:
+        cands = [c for c in cands if c.get("email")]
+
+    if args.use_personalized:
+        # Use the combined import+PATCH-personalize flow
+        out(server.import_and_personalize(
+            sequence_id=resolve_seq(args.ref),
+            candidates=cands,
+            step_id=args.step_id,
+            enable_enrichment=args.enrich,
+            settle_seconds=args.settle,
+        ))
+    else:
+        out(server.import_search_results_to_sequence(
+            search_candidates=cands,
+            sequence_id=resolve_seq(args.ref),
+            enable_enrichment=args.enrich,
+        ))
 
 
 def cmd_history(args):
@@ -387,6 +404,21 @@ def main():
     s.add_argument("--from", dest="from_file", required=True,
                    help="JSON file with either {candidates:[...]} or a bare list")
     s.add_argument("--enrich", action="store_true")
+    s.add_argument("--confident-only", action="store_true",
+                   help="only import candidates with email_confidence=='high' "
+                        "(set by the acad CLI's normalized last-name matcher)")
+    s.add_argument("--min-email", action="store_true",
+                   help="drop candidates with no email at all")
+    s.add_argument("--use-personalized", action="store_true",
+                   help="after import, PATCH /personalize for each enrollment with the "
+                        "candidate's personalized_subject / personalized_message and "
+                        "set isApproved=true (skips Talunt's AI regeneration). "
+                        "Pair with `acad render-messages` output.")
+    s.add_argument("--step-id", default=None,
+                   help="step id for personalization PATCH; defaults to first step")
+    s.add_argument("--settle", type=int, default=20,
+                   help="seconds to wait after import before patching personalizations "
+                        "(lets Talunt finish creating enrollments)")
     s.set_defaults(fn=cmd_import_search)
 
     sub.add_parser("history").set_defaults(fn=cmd_history)
