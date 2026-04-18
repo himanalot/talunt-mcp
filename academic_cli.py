@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["httpx>=0.27"]
+# dependencies = ["httpx>=0.27", "openai>=1.50"]
 # ///
 """
 academic — find academic researchers via OpenAlex + PubMed + ORCID.
@@ -26,7 +26,7 @@ Subcommands:
 Polite-pool settings: all requests include contact email for higher rate limits.
 """
 from __future__ import annotations
-import argparse, json, re, sys, time, concurrent.futures, urllib.parse
+import argparse, json, os, re, sys, time, concurrent.futures, urllib.parse
 import httpx
 
 CONTACT_EMAIL = "ishanramrakhiani@gmail.com"
@@ -420,6 +420,159 @@ def enrich_academics_in_place(candidates: list[dict], workers: int = 3,
     return enriched
 
 
+# ------------------- .env loading (for FIREWORKS_API_KEY) -------------------
+
+def _load_env_file():
+    """Minimal .env loader — reads KEY=VALUE lines from ./.env next to this file."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        for line in open(env_path):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip(); v = v.strip().strip('"').strip("'")
+            if k and v and k not in os.environ:
+                os.environ[k] = v
+    except Exception:
+        pass
+
+
+# ------------------- AI personalization via Fireworks -------------------
+
+def _candidate_context(c: dict, institution_fallback: str = "") -> str:
+    """Build a compact human-readable context block for LLM input."""
+    lines = []
+    if c.get("name"):             lines.append(f"Full name: {c['name']}")
+    if c.get("title_prefix"):     lines.append(f"Suggested salutation: {c.get('salutation_name') or c['title_prefix']}")
+    else:                          lines.append(f"Suggested salutation: {c.get('salutation_name') or (c.get('name') or '').split()[0]}")
+    if c.get("current_role"):     lines.append(f"Current role: {c['current_role']}")
+    if c.get("department"):       lines.append(f"Department: {c['department']}")
+    if c.get("company") or institution_fallback:
+        lines.append(f"Institution: {c.get('company') or institution_fallback}")
+    topics = c.get("topics") or []
+    if topics:                     lines.append(f"Research topics: {', '.join(topics[:3])}")
+    if c.get("h_index"):          lines.append(f"H-index: {c['h_index']}")
+    if c.get("works_count"):      lines.append(f"Total papers: {c['works_count']}")
+    p = c.get("recent_paper") or {}
+    if p and p.get("title"):
+        paper_line = f'Most recent paper: "{p["title"]}"'
+        if p.get("venue"): paper_line += f" ({p['venue']}"
+        if p.get("year"):  paper_line += f" {p['year']}"
+        if p.get("venue"): paper_line += ")"
+        lines.append(paper_line)
+    if p and p.get("is_preprint"):
+        lines.append(f"(This paper is a preprint.)")
+    return "\n".join(lines)
+
+
+def ai_render_messages(
+    candidates: list[dict],
+    system_prompt: str,
+    user_prompt_template: str,
+    model: str = "accounts/fireworks/models/gpt-oss-120b",
+    api_key: str | None = None,
+    workers: int = 5,
+    temperature: float = 0.7,
+    max_tokens: int = 1000,
+    institution_fallback: str = "",
+    log=sys.stderr,
+) -> list[dict]:
+    """For each candidate, call Fireworks (OpenAI-compatible) with rich context;
+    expect JSON `{subject, message}`; store as personalized_subject/message.
+
+    user_prompt_template may include the placeholder `{context}` which is replaced
+    with a multi-line context block about the candidate. Any other `{field}`
+    placeholders are substituted from the candidate dict (safe — missing → "")."""
+    import concurrent.futures, time
+    from openai import OpenAI
+
+    _load_env_file()
+    key = api_key or os.environ.get("FIREWORKS_API_KEY")
+    if not key:
+        raise RuntimeError("FIREWORKS_API_KEY not set (env or .env file)")
+
+    client = OpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=key)
+
+    # Build a SafeDict so user template can have stray {unknown} keys
+    class _SafeDict(dict):
+        def __missing__(self, _): return ""
+
+    def render_one(c):
+        ctx_block = _candidate_context(c, institution_fallback)
+        ctx_map = _SafeDict({
+            "context": ctx_block,
+            "name": c.get("name", ""),
+            "first_name": (c.get("name") or "").split()[0] if c.get("name") else "",
+            "last_name": (c.get("name") or "").split()[-1] if c.get("name") else "",
+            "salutation": c.get("salutation_name") or (c.get("name") or "").split()[0] if c.get("name") else "",
+            "title": c.get("title_prefix") or "",
+            "institution": c.get("company") or institution_fallback or "",
+            "department": c.get("department") or "",
+            "topic": (c.get("topics") or [""])[0],
+            "topics": ", ".join((c.get("topics") or [])[:3]),
+            "h_index": c.get("h_index") or "",
+            "recent_paper_title": (c.get("recent_paper") or {}).get("title", ""),
+            "recent_paper_year":  (c.get("recent_paper") or {}).get("year", ""),
+            "recent_paper_venue": (c.get("recent_paper") or {}).get("venue", ""),
+        })
+        try:
+            user_msg = user_prompt_template.format_map(ctx_map)
+        except (ValueError, KeyError, IndexError):
+            # Template has unescaped literal braces (e.g. JSON schema examples).
+            # Only substitute the known placeholders, leave everything else raw.
+            user_msg = user_prompt_template
+            for k, v in ctx_map.items():
+                user_msg = user_msg.replace("{" + k + "}", str(v))
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_msg},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format={"type": "json_object"},
+            )
+            text = resp.choices[0].message.content or ""
+        except Exception as e:
+            c["personalized_subject"] = ""
+            c["personalized_message"] = ""
+            c["ai_error"] = str(e)[:300]
+            return c
+        # Parse JSON
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            # Try to extract a JSON object from the response
+            import re
+            m = re.search(r"\{[\s\S]*\}", text)
+            parsed = json.loads(m.group(0)) if m else {}
+        c["personalized_subject"] = (parsed.get("subject") or parsed.get("subject_line") or "").strip()
+        c["personalized_message"] = (parsed.get("message") or parsed.get("body")
+                                     or parsed.get("email_body") or "").strip()
+        return c
+
+    t0 = time.time()
+    # Stream progress so the user can see it's working on large batches
+    done = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(render_one, c) for c in candidates]
+        for fut in concurrent.futures.as_completed(futures):
+            fut.result()
+            done += 1
+            if done % 25 == 0 or done == len(candidates):
+                print(f"[acad-ai] {done}/{len(candidates)}  ({time.time()-t0:.0f}s)", file=log)
+
+    ok = sum(1 for c in candidates if c.get("personalized_message"))
+    err = sum(1 for c in candidates if c.get("ai_error"))
+    print(f"[acad-ai] done in {time.time()-t0:.0f}s — rendered {ok}/{len(candidates)}; errors={err}", file=log)
+    return candidates
+
+
 # ------------------- Template rendering -------------------
 
 def render_message(template: str, candidate: dict, institution_fallback: str = "") -> str:
@@ -711,6 +864,54 @@ def main():
             "with_recent_paper":sum(1 for c in data["candidates"] if c.get("recent_paper")),
         })
     s.set_defaults(fn=_cmd_enrich)
+
+    # ai-render-messages: uses an LLM (default Fireworks gpt-oss-120b) to write a
+    # personalized email per candidate using the enriched profile as context.
+    s = sub.add_parser("ai-render-messages",
+                       help="LLM-based per-candidate email rendering via Fireworks "
+                            "(gpt-oss-120b by default). Fills personalized_subject "
+                            "and personalized_message on each candidate.")
+    s.add_argument("file", help="JSON file (mutated in place)")
+    s.add_argument("--system-prompt-file", required=True,
+                   help="path to the system prompt (your voice / goal / constraints)")
+    s.add_argument("--user-prompt-file", required=True,
+                   help="path to the user prompt template. Include {context} for "
+                        "the per-candidate context block. Other placeholders also "
+                        "resolve: {salutation}, {recent_paper_title}, {topic}, ...")
+    s.add_argument("--model", default="accounts/fireworks/models/gpt-oss-120b",
+                   help="Fireworks model id (default gpt-oss-120b)")
+    s.add_argument("--workers", type=int, default=5)
+    s.add_argument("--temperature", type=float, default=0.7)
+    s.add_argument("--max-tokens", type=int, default=1000)
+    s.add_argument("--limit", type=int, default=None,
+                   help="only render the first N candidates (for cheap testing)")
+    def _cmd_ai_render(a):
+        system_prompt = open(a.system_prompt_file).read()
+        user_prompt   = open(a.user_prompt_file).read()
+        with open(a.file) as f: data = json.load(f)
+        cands = data.get("candidates", [])
+        if a.limit:
+            cands_to_render = cands[:a.limit]
+        else:
+            cands_to_render = cands
+        inst = data.get("query","").split(" at ")[-1] if " at " in data.get("query","") else ""
+        ai_render_messages(
+            cands_to_render,
+            system_prompt=system_prompt,
+            user_prompt_template=user_prompt,
+            model=a.model, workers=a.workers,
+            temperature=a.temperature, max_tokens=a.max_tokens,
+            institution_fallback=inst,
+        )
+        with open(a.file, "w") as f: json.dump(data, f, default=str)
+        out({
+            "file": a.file,
+            "rendered": sum(1 for c in cands_to_render if c.get("personalized_message")),
+            "errors":   sum(1 for c in cands_to_render if c.get("ai_error")),
+            "total":    len(cands_to_render),
+            "model":    a.model,
+        })
+    s.set_defaults(fn=_cmd_ai_render)
 
     # render-messages: fills personalized_subject/personalized_message per candidate
     s = sub.add_parser("render-messages",
