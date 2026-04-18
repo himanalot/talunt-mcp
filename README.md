@@ -1,5 +1,11 @@
 # talunt-mcp
 
+**Two CLIs in this repo:**
+- **`cli.py`** / alias `talunt` — wraps the Talunt SaaS (LinkedIn-only via Crustdata + Unipile)
+- **`academic_cli.py`** / alias `acad` — finds *academic* researchers via OpenAlex + PubMed + ORCID, outputs JSON in the same shape `talunt import-search` expects, so the two tools chain.
+
+
+
 Reverse-engineered MCP server + CLI for [app.talunt.io](https://app.talunt.io).
 Auth is read live from your local Chrome cookies — no API keys, no token
 management. As long as you're signed in to talunt.io in Chrome, the tools
@@ -208,3 +214,57 @@ conversations                   chat conversation list
 conversation <id>               full chat thread with messages
 agent-runs
 ```
+
+## academic CLI (`acad`)
+
+Finds academic researchers via OpenAlex (author search) + PubMed E-utilities
+(email extraction from affiliation strings) + ORCID. Output JSON is drop-in
+compatible with `talunt import-search` so you can pipe academic contacts
+straight into a Talunt sequence.
+
+**Setup:**
+```bash
+alias acad='uv run --script ~/talunt-mcp/academic_cli.py'
+```
+
+**Typical workflow:**
+```bash
+# Find 100 genome researchers at UC Berkeley, enrich with emails from PubMed
+acad pipeline ucb --topic "genomics" --limit 100 > /tmp/ucb_genomics.json
+
+# Import them into a draft Talunt sequence
+talunt import-search <your-seq-id> --from /tmp/ucb_genomics.json
+```
+
+**Subcommands:**
+```
+list-ucs                        list known UC campuses + OpenAlex IDs
+find-topic <query>              search OpenAlex topics (returns topic IDs)
+authors <uc> [--topic T...]     list OpenAlex authors at an institution
+emails <name> [--orcid ID]      fetch emails for one author via PubMed
+orcid --institution X --keyword search ORCID expanded-search
+ucsf-profiles <query>           UCSF-specific structured search
+pipeline <uc> --topic QUERY     end-to-end: authors + email enrichment
+```
+
+**UC campuses covered:** ucb, ucla, ucsd, ucsf, ucdavis, uci, ucsb, ucsc, ucr, ucm.
+
+**Expected yields** on `pipeline ucb --topic "genomics" --limit 100`:
+- ~100 authors from OpenAlex (sorted by citation count)
+- 70–85% email coverage via PubMed corresponding-author affiliation strings
+- Runtime ~2–4 min (1 PubMed call batch per author, default sequential to avoid 3/s rate limit)
+
+**Why it's slow sequential by default:** NCBI E-utilities soft-limits to ~3 req/s
+without an API key and silently returns empty responses when you exceed it.
+Staying single-threaded is the simplest way to guarantee coverage. If you get
+an NCBI API key and set it up, you can bump `--email-workers 3` safely.
+
+**Email accuracy caveats:**
+- Emails come from PubMed `<Affiliation>` strings — only corresponding authors
+  list them, so ~15% of PIs have no email anywhere in their recent papers.
+- Name-based search (used when ORCID is missing) can pick up a collaborator's
+  email instead of the target author's. The heuristic prefers emails whose
+  local-part contains the author's last name, which handles most cases.
+- OpenAlex's "last known institution" is sometimes wrong for researchers
+  with multiple appointments or visiting positions — filter by
+  `last_known_institution_name` in the output if it matters.
